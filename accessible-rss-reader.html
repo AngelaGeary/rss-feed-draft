@@ -1,0 +1,1566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Accessible RSS Reader</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+
+  :root {
+    --bg: #0d0f12;
+    --surface: #161a20;
+    --surface-raised: #1e2430;
+    --border: #2a3040;
+    --border-focus: #5ba4f5;
+    --text: #e8ecf2;
+    --text-muted: #8a95a8;
+    --accent: #5ba4f5;
+    --accent-dim: #3a6fb0;
+    --success: #4ac49a;
+    --warn: #e8a838;
+    --danger: #e85858;
+    --reading-bg: #111418;
+    --font: 'Atkinson Hyperlegible', sans-serif;
+    --radius: 8px;
+    --focus-ring: 0 0 0 3px var(--accent), 0 0 0 5px var(--bg);
+  }
+
+  [data-theme="high-contrast"] {
+    --bg: #000000;
+    --surface: #0a0a0a;
+    --surface-raised: #141414;
+    --border: #ffffff;
+    --border-focus: #ffff00;
+    --text: #ffffff;
+    --text-muted: #cccccc;
+    --accent: #ffff00;
+    --accent-dim: #cccc00;
+    --success: #00ff88;
+    --warn: #ffaa00;
+    --danger: #ff4444;
+    --reading-bg: #000000;
+  }
+
+  [data-theme="light"] {
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --surface-raised: #e9ecf0;
+    --border: #c0c8d4;
+    --border-focus: #2a6dcc;
+    --text: #111820;
+    --text-muted: #556070;
+    --accent: #2a6dcc;
+    --accent-dim: #1a4d8c;
+    --success: #1a8a5a;
+    --warn: #a06800;
+    --danger: #c03030;
+    --reading-bg: #ffffff;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { font-size: 18px; }
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  /* Skip link */
+  .skip-link {
+    position: absolute;
+    top: -100px;
+    left: 8px;
+    background: var(--accent);
+    color: var(--bg);
+    padding: 8px 16px;
+    border-radius: var(--radius);
+    font-weight: 700;
+    z-index: 1000;
+    text-decoration: none;
+  }
+  .skip-link:focus { top: 8px; }
+
+  /* Focus styles */
+  *:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+    border-radius: 4px;
+  }
+
+  /* Layout */
+  .app {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  h1 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--accent);
+  }
+
+  .header-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  /* Buttons */
+  button, select {
+    font-family: var(--font);
+    font-size: 0.9rem;
+    padding: 8px 14px;
+    border: 2px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-weight: 700;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  button:hover, select:hover { border-color: var(--accent); }
+  button.primary {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+  }
+  button.primary:hover { background: var(--accent-dim); border-color: var(--accent-dim); }
+  button.icon-btn {
+    padding: 8px 10px;
+    font-size: 1.1rem;
+    line-height: 1;
+  }
+
+  /* Status bar */
+  .status {
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .status .badge {
+    background: var(--accent);
+    color: var(--bg);
+    padding: 2px 8px;
+    border-radius: 100px;
+    font-weight: 700;
+    font-size: 0.8rem;
+  }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 16px;
+  }
+  .tabs [role="tab"] {
+    padding: 10px 18px;
+    border: 2px solid var(--border);
+    border-bottom: none;
+    border-radius: var(--radius) var(--radius) 0 0;
+    background: var(--surface);
+    color: var(--text-muted);
+    font-weight: 700;
+    cursor: pointer;
+    font-family: var(--font);
+    font-size: 0.9rem;
+  }
+  .tabs [role="tab"][aria-selected="true"] {
+    background: var(--surface-raised);
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  /* Panel */
+  [role="tabpanel"] {
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 0 var(--radius) var(--radius) var(--radius);
+    padding: 16px;
+    min-height: 300px;
+    flex: 1;
+  }
+  [role="tabpanel"][hidden] { display: none; }
+
+  /* Search / Add form */
+  .form-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .form-row label { display: contents; }
+  input[type="text"], input[type="url"] {
+    font-family: var(--font);
+    font-size: 0.95rem;
+    padding: 10px 14px;
+    border: 2px solid var(--border);
+    background: var(--surface-raised);
+    color: var(--text);
+    border-radius: var(--radius);
+    flex: 1;
+    min-width: 200px;
+  }
+  input:focus-visible {
+    border-color: var(--border-focus);
+    box-shadow: var(--focus-ring);
+  }
+
+  /* Feed list */
+  .feed-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .feed-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--surface-raised);
+    border: 2px solid transparent;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .feed-item:hover, .feed-item:focus-visible { border-color: var(--accent); }
+  .feed-item[aria-current="true"] { border-color: var(--accent); background: var(--bg); }
+  .feed-item .feed-title { flex: 1; font-weight: 700; }
+  .feed-item .feed-count {
+    background: var(--accent);
+    color: var(--bg);
+    padding: 2px 8px;
+    border-radius: 100px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    min-width: 26px;
+    text-align: center;
+  }
+  .feed-item .feed-remove {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    padding: 4px 6px;
+    font-size: 1rem;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+  .feed-item .feed-remove:hover { color: var(--danger); }
+
+  /* Articles list */
+  .article-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 50vh;
+    overflow-y: auto;
+    padding: 4px;
+  }
+  .article-item {
+    padding: 12px 14px;
+    background: var(--surface-raised);
+    border: 2px solid transparent;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .article-item:hover, .article-item:focus-visible { border-color: var(--accent); }
+  .article-item[aria-current="true"] { border-color: var(--accent); }
+  .article-item.read { opacity: 0.6; }
+  .article-item .article-title { font-weight: 700; margin-bottom: 4px; }
+  .article-item .article-meta { font-size: 0.8rem; color: var(--text-muted); }
+
+  /* Article reading view */
+  .reading-pane {
+    background: var(--reading-bg);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-top: 12px;
+    line-height: 1.8;
+  }
+  .reading-pane h2 { font-size: 1.3rem; margin-bottom: 8px; color: var(--accent); }
+  .reading-pane .meta { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px; }
+  .reading-pane .content { font-size: 1rem; }
+  .reading-pane .content a { color: var(--accent); }
+
+  /* Images in reading pane */
+  .reading-pane .content img {
+    display: block;
+    max-width: 100%;
+    width: 100%;
+    max-height: 400px;
+    object-fit: cover;
+    border-radius: var(--radius);
+    margin: 16px 0;
+    border: 2px solid var(--border);
+  }
+  .reading-pane .content figure {
+    margin: 16px 0;
+    padding: 0;
+  }
+  .reading-pane .content figcaption {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 6px;
+    text-align: center;
+  }
+
+  /* Images in article list items (digest/articles) */
+  .article-item img, .article-thumb {
+    display: block;
+    width: 80px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: 4px;
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+  }
+
+  /* Original article link */
+  .original-link {
+    display: inline-block;
+    margin-top: 16px;
+    padding: 8px 16px;
+    background: var(--surface-raised);
+    border: 2px solid var(--accent);
+    border-radius: var(--radius);
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 0.9rem;
+  }
+  .original-link:hover { background: var(--accent); color: var(--bg); }
+
+  /* Paywall / truncated warning */
+  .paywall-warning {
+    background: var(--surface-raised);
+    border: 2px solid var(--warn);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    margin: 16px 0;
+    font-size: 0.9rem;
+    color: var(--warn);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .paywall-warning::before { content: '⚠'; font-size: 1.2rem; }
+
+  .truncated-badge {
+    display: inline-block;
+    background: var(--warn);
+    color: var(--bg);
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 100px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+
+  .reading-controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+
+  /* Search results */
+  .search-results {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .search-result {
+    padding: 12px 14px;
+    background: var(--surface-raised);
+    border: 2px solid transparent;
+    border-radius: var(--radius);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .search-result:hover { border-color: var(--accent); }
+  .search-result .sr-info { flex: 1; }
+  .search-result .sr-title { font-weight: 700; }
+  .search-result .sr-url { font-size: 0.8rem; color: var(--text-muted); word-break: break-all; }
+
+  /* Keyboard help */
+  .help-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 16px;
+    font-size: 0.9rem;
+  }
+  .help-grid kbd {
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-family: var(--font);
+    font-weight: 700;
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+    font-size: 1rem;
+  }
+
+  .loading { opacity: 0.5; pointer-events: none; }
+
+  @media (max-width: 600px) {
+    html { font-size: 16px; }
+    .app { padding: 10px; }
+    header { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body data-theme="dark">
+
+<a href="#main" class="skip-link">Skip to main content</a>
+
+<div class="app">
+  <header>
+    <h1>&#9881; Accessible RSS Reader</h1>
+    <div class="header-controls">
+      <label for="theme-select" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">Theme</label>
+      <select id="theme-select" aria-label="Color theme">
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+        <option value="high-contrast">High Contrast</option>
+      </select>
+      <button id="speech-toggle" class="icon-btn" aria-label="Toggle speech: off" aria-pressed="false" title="Toggle speech announcements">&#128264;</button>
+      <button id="help-btn" class="icon-btn" aria-label="Keyboard shortcuts help" title="Keyboard shortcuts">?</button>
+    </div>
+  </header>
+
+  <div class="status" role="status" aria-live="polite" id="status">
+    Ready. Use Tab to navigate, Enter to select. Press ? for keyboard help.
+  </div>
+
+  <main id="main">
+    <div class="tabs" role="tablist" aria-label="Main sections">
+      <button role="tab" id="tab-digest" aria-selected="true" aria-controls="panel-digest" tabindex="0">Digest</button>
+      <button role="tab" id="tab-feeds" aria-selected="false" aria-controls="panel-feeds" tabindex="-1">My Feeds</button>
+      <button role="tab" id="tab-search" aria-selected="false" aria-controls="panel-search" tabindex="-1">Find Feeds</button>
+      <button role="tab" id="tab-add" aria-selected="false" aria-controls="panel-add" tabindex="-1">Add by URL</button>
+    </div>
+
+    <!-- DIGEST PANEL -->
+    <div role="tabpanel" id="panel-digest" aria-labelledby="tab-digest">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+        <h2 id="digest-heading" style="font-size:1.1rem;flex:1;">Digest — Latest from All Feeds</h2>
+        <button id="digest-refresh" class="primary" aria-label="Refresh digest">&#8635; Refresh</button>
+        <button id="digest-read-all" aria-label="Read all headlines aloud">&#128264; Read Headlines</button>
+      </div>
+      <div id="digest-status" style="font-size:0.85rem;color:var(--text-muted);margin-bottom:10px;" aria-live="polite"></div>
+      <ul class="article-list" id="digest-list" role="listbox" aria-labelledby="digest-heading" style="max-height:65vh;"></ul>
+      <div id="digest-empty" class="empty-state">Subscribe to some feeds first, then come back here to see the latest from all of them in one place.</div>
+    </div>
+
+    <!-- MY FEEDS PANEL -->
+    <div role="tabpanel" id="panel-feeds" aria-labelledby="tab-feeds" hidden>
+      <div id="feeds-view">
+        <h2 id="feeds-heading" style="font-size:1.1rem;margin-bottom:12px;">Subscribed Feeds</h2>
+        <ul class="feed-list" id="feed-list" role="listbox" aria-labelledby="feeds-heading"></ul>
+        <div id="feeds-empty" class="empty-state">
+          No feeds yet. Go to "Find Feeds" or "Add by URL" to get started.
+        </div>
+      </div>
+
+      <div id="articles-view" hidden>
+        <button id="back-to-feeds" style="margin-bottom:12px;">&#8592; Back to feeds</button>
+        <h2 id="articles-heading" style="font-size:1.1rem;margin-bottom:12px;"></h2>
+        <ul class="article-list" id="article-list" role="listbox" aria-labelledby="articles-heading"></ul>
+      </div>
+
+      <div id="reading-view" hidden>
+        <button id="back-to-articles" style="margin-bottom:12px;">&#8592; Back to articles</button>
+        <div class="reading-pane" id="reading-pane">
+          <div class="reading-controls">
+            <button id="read-aloud-btn" class="primary" aria-label="Read article aloud">&#128264; Read Aloud</button>
+            <button id="stop-reading-btn" aria-label="Stop reading">&#9724; Stop</button>
+            <button id="prev-article-btn" aria-label="Previous article">&#8592; Prev</button>
+            <button id="next-article-btn" aria-label="Next article">Next &#8594;</button>
+          </div>
+          <h2 id="reading-title"></h2>
+          <div class="meta" id="reading-meta"></div>
+          <div class="content" id="reading-content"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SEARCH PANEL -->
+    <div role="tabpanel" id="panel-search" aria-labelledby="tab-search" hidden>
+      <h2 style="font-size:1.1rem;margin-bottom:12px;">Discover RSS Feeds</h2>
+      <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:14px;">Search by <strong>keyword</strong> (e.g. "theology", "cooking", "accessibility") to find topic feeds, or enter a <strong>website URL</strong> (e.g. "evangelical-times.org") to discover its feeds.</p>
+      <div class="form-row">
+        <label for="search-input" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">Search keywords or website URL</label>
+        <input type="text" id="search-input" placeholder="Keywords or website URL..." aria-label="Search for feeds by keyword or website URL">
+        <button id="search-btn" class="primary">Search</button>
+      </div>
+      <div id="search-status" style="font-size:0.85rem;color:var(--text-muted);margin-bottom:10px;" aria-live="polite"></div>
+      <ul class="search-results" id="search-results" role="list" aria-label="Search results"></ul>
+      <div id="search-empty" class="empty-state">Enter keywords or a website URL above to discover RSS feeds.</div>
+    </div>
+
+    <!-- ADD BY URL PANEL -->
+    <div role="tabpanel" id="panel-add" aria-labelledby="tab-add" hidden>
+      <h2 style="font-size:1.1rem;margin-bottom:12px;">Add Feed by URL</h2>
+      <div class="form-row">
+        <label for="url-input" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">Feed URL</label>
+        <input type="url" id="url-input" placeholder="https://example.com/feed.xml" aria-label="RSS feed URL">
+        <button id="add-url-btn" class="primary">Add Feed</button>
+      </div>
+      <p style="font-size:0.85rem;color:var(--text-muted);">Paste any RSS or Atom feed URL. You can usually find these on a website's footer or by adding <kbd>/feed</kbd> or <kbd>/rss</kbd> to the site's address.</p>
+    </div>
+  </main>
+</div>
+
+<!-- Keyboard help dialog -->
+<dialog id="help-dialog" aria-labelledby="help-dialog-title" style="background:var(--surface);color:var(--text);border:2px solid var(--border);border-radius:var(--radius);padding:24px;max-width:500px;width:90vw;font-family:var(--font);">
+  <h2 id="help-dialog-title" style="margin-bottom:16px;color:var(--accent);">Keyboard Shortcuts</h2>
+  <div class="help-grid">
+    <kbd>Tab</kbd><span>Move to next element</span>
+    <kbd>Shift+Tab</kbd><span>Move to previous element</span>
+    <kbd>Enter</kbd><span>Activate / open item</span>
+    <kbd>Escape</kbd><span>Go back / close dialog</span>
+    <kbd>&#8592; &#8594;</kbd><span>Switch between tabs</span>
+    <kbd>&#8593; &#8595;</kbd><span>Move through feed/article lists</span>
+    <kbd>S</kbd><span>Toggle speech on/off</span>
+    <kbd>R</kbd><span>Read current article aloud</span>
+    <kbd>X</kbd><span>Stop reading aloud</span>
+    <kbd>N</kbd><span>Next article</span>
+    <kbd>P</kbd><span>Previous article</span>
+    <kbd>D</kbd><span>Go to Digest</span>
+    <kbd>/</kbd><span>Focus search field</span>
+  </div>
+  <button id="close-help" style="margin-top:20px;" class="primary" autofocus>Close</button>
+</dialog>
+
+<script>
+// ─── State ──────────────────────────────────────────────────
+const state = {
+  feeds: [],
+  currentFeed: null,
+  articles: [],
+  currentArticleIndex: -1,
+  speechEnabled: false,
+  view: 'feeds' // feeds | articles | reading
+};
+
+// ─── DOM refs ───────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const statusEl = $('status');
+const feedListEl = $('feed-list');
+const articleListEl = $('article-list');
+const themeSelect = $('theme-select');
+const speechToggle = $('speech-toggle');
+const helpBtn = $('help-btn');
+const helpDialog = $('help-dialog');
+const searchInput = $('search-input');
+const searchResults = $('search-results');
+const urlInput = $('url-input');
+
+// ─── Speech (robust engine) ─────────────────────────────────
+let preferredVoice = null;
+let speechQueue = [];
+let isSpeaking = false;
+let speechWatchdog = null;
+let voicesReady = false;
+
+// Pick a friendly female voice from whatever the browser/OS offers
+function loadPreferredVoice() {
+  const voices = window.speechSynthesis?.getVoices() || [];
+  if (voices.length === 0) return;
+  voicesReady = true;
+
+  const femaleNames = [
+    'samantha', 'karen', 'moira', 'fiona', 'tessa', 'serena',
+    'victoria', 'allison', 'ava', 'susan', 'zira',
+    'hazel', 'catherine', 'kate', 'linda', 'emma',
+    'jenny', 'aria', 'sara', 'neerja', 'libby',
+    'sonia', 'natasha', 'female', 'woman'
+  ];
+
+  for (const name of femaleNames) {
+    const match = voices.find(v =>
+      v.lang.startsWith('en') && v.name.toLowerCase().includes(name)
+    );
+    if (match) { preferredVoice = match; return; }
+  }
+
+  const femaleVoice = voices.find(v =>
+    v.lang.startsWith('en') && /female|woman/i.test(v.name)
+  );
+  if (femaleVoice) { preferredVoice = femaleVoice; return; }
+
+  const englishVoices = voices.filter(v => v.lang.startsWith('en'));
+  if (englishVoices.length > 1) preferredVoice = englishVoices[1];
+  else if (englishVoices.length > 0) preferredVoice = englishVoices[0];
+}
+
+// Voices load async — wait for them with retries
+function ensureVoices() {
+  return new Promise(resolve => {
+    if (voicesReady) { resolve(); return; }
+    loadPreferredVoice();
+    if (voicesReady) { resolve(); return; }
+    // Retry up to 10 times at 100ms intervals
+    let tries = 0;
+    const iv = setInterval(() => {
+      loadPreferredVoice();
+      tries++;
+      if (voicesReady || tries > 10) { clearInterval(iv); resolve(); }
+    }, 100);
+  });
+}
+
+if ('speechSynthesis' in window) {
+  loadPreferredVoice();
+  window.speechSynthesis.onvoiceschanged = loadPreferredVoice;
+}
+
+// Split text into safe chunks — Chrome kills utterances longer than ~200 chars
+function splitIntoChunks(text, maxLen = 180) {
+  const chunks = [];
+  // Split on sentence boundaries first
+  const sentences = text.replace(/([.!?])\s+/g, '$1|SPLIT|').split('|SPLIT|');
+  let current = '';
+  for (const sentence of sentences) {
+    if ((current + ' ' + sentence).length > maxLen && current.length > 0) {
+      chunks.push(current.trim());
+      current = sentence;
+    } else {
+      current = current ? current + ' ' + sentence : sentence;
+    }
+  }
+  if (current.trim()) chunks.push(current.trim());
+
+  // If any chunk is still too long, hard-split on commas or spaces
+  const result = [];
+  for (const chunk of chunks) {
+    if (chunk.length <= maxLen) {
+      result.push(chunk);
+    } else {
+      // Split on commas
+      const parts = chunk.split(/,\s*/);
+      let sub = '';
+      for (const part of parts) {
+        if ((sub + ', ' + part).length > maxLen && sub.length > 0) {
+          result.push(sub.trim());
+          sub = part;
+        } else {
+          sub = sub ? sub + ', ' + part : part;
+        }
+      }
+      if (sub.trim()) result.push(sub.trim());
+    }
+  }
+  return result.length > 0 ? result : [''];
+}
+
+// Chrome bug: speechSynthesis gets stuck/paused after ~15s.
+// Workaround: use a periodic resume() call while speaking.
+function startWatchdog() {
+  stopWatchdog();
+  speechWatchdog = setInterval(() => {
+    if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+      // Nudge Chrome to keep going
+      window.speechSynthesis.pause();
+      window.speechSynthesis.resume();
+    }
+  }, 5000);
+}
+
+function stopWatchdog() {
+  if (speechWatchdog) { clearInterval(speechWatchdog); speechWatchdog = null; }
+}
+
+// Speak a queue of chunks sequentially
+async function processQueue() {
+  if (isSpeaking) return;
+  isSpeaking = true;
+  startWatchdog();
+
+  while (speechQueue.length > 0) {
+    const { text, rate } = speechQueue.shift();
+    await speakOne(text, rate);
+  }
+
+  stopWatchdog();
+  isSpeaking = false;
+}
+
+function speakOne(text, rate) {
+  return new Promise(resolve => {
+    if (!text.trim()) { resolve(); return; }
+
+    const synth = window.speechSynthesis;
+    // Safety: cancel anything stuck
+    synth.cancel();
+
+    const u = new SpeechSynthesisUtterance(text);
+    if (preferredVoice) u.voice = preferredVoice;
+    u.rate = rate;
+    u.pitch = 1.1;
+
+    let resolved = false;
+    const done = () => { if (!resolved) { resolved = true; resolve(); } };
+
+    u.onend = done;
+    u.onerror = (e) => {
+      // 'interrupted' is normal when we cancel; only warn on real errors
+      if (e.error !== 'interrupted' && e.error !== 'canceled') {
+        console.warn('Speech error:', e.error, 'on:', text.substring(0, 40));
+      }
+      done();
+    };
+
+    // Timeout safety: if utterance doesn't finish in a reasonable time, move on
+    const timeout = Math.max(15000, text.length * 100);
+    setTimeout(done, timeout);
+
+    synth.speak(u);
+  });
+}
+
+function stopReading() {
+  speechQueue = [];
+  isSpeaking = false;
+  stopWatchdog();
+  if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+}
+
+async function announce(text) {
+  statusEl.textContent = text;
+  if (state.speechEnabled && 'speechSynthesis' in window) {
+    await ensureVoices();
+    stopReading();
+    speechQueue = [{ text, rate: 1.0 }];
+    processQueue();
+  }
+}
+
+async function readAloud(text) {
+  if (!('speechSynthesis' in window)) return;
+  await ensureVoices();
+  stopReading();
+  // Split long text into chunks to avoid Chrome cutoff
+  const chunks = splitIntoChunks(text);
+  speechQueue = chunks.map(c => ({ text: c, rate: 0.95 }));
+  processQueue();
+}
+
+// ─── Theme ──────────────────────────────────────────────────
+themeSelect.addEventListener('change', () => {
+  document.body.dataset.theme = themeSelect.value;
+  announce('Theme changed to ' + themeSelect.value);
+});
+
+// ─── Speech toggle ──────────────────────────────────────────
+speechToggle.addEventListener('click', () => {
+  state.speechEnabled = !state.speechEnabled;
+  speechToggle.setAttribute('aria-pressed', state.speechEnabled);
+  speechToggle.setAttribute('aria-label', 'Toggle speech: ' + (state.speechEnabled ? 'on' : 'off'));
+  speechToggle.textContent = state.speechEnabled ? '🔊' : '🔈';
+  announce('Speech ' + (state.speechEnabled ? 'enabled' : 'disabled'));
+});
+
+// ─── Help dialog ────────────────────────────────────────────
+helpBtn.addEventListener('click', () => helpDialog.showModal());
+$('close-help').addEventListener('click', () => helpDialog.close());
+
+// ─── Tabs ───────────────────────────────────────────────────
+const tabs = document.querySelectorAll('[role="tab"]');
+const panels = document.querySelectorAll('[role="tabpanel"]');
+
+function activateTab(tab) {
+  tabs.forEach(t => { t.setAttribute('aria-selected', 'false'); t.tabIndex = -1; });
+  panels.forEach(p => p.hidden = true);
+  tab.setAttribute('aria-selected', 'true');
+  tab.tabIndex = 0;
+  tab.focus();
+  document.getElementById(tab.getAttribute('aria-controls')).hidden = false;
+  announce(tab.textContent + ' tab selected');
+}
+
+tabs.forEach(tab => {
+  tab.addEventListener('click', () => activateTab(tab));
+  tab.addEventListener('keydown', e => {
+    const idx = [...tabs].indexOf(tab);
+    if (e.key === 'ArrowRight') { e.preventDefault(); activateTab(tabs[(idx + 1) % tabs.length]); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); activateTab(tabs[(idx - 1 + tabs.length) % tabs.length]); }
+  });
+});
+
+// ─── RSS Fetching (multiple strategies) ─────────────────────
+
+// Strategy 1: rss2json
+async function fetchViaRss2Json(url) {
+  const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`);
+  if (!res.ok) throw new Error('rss2json fetch failed');
+  const data = await res.json();
+  if (data.status !== 'ok') throw new Error(data.message || 'rss2json parse error');
+  return data;
+}
+
+// Strategy 2: Use allorigins CORS proxy + client-side XML parse
+async function fetchViaCorsProxy(url) {
+  const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+  const res = await fetch(proxyUrl);
+  if (!res.ok) throw new Error('CORS proxy fetch failed');
+  const text = await res.text();
+  return parseRssXml(text, url);
+}
+
+// Strategy 3: Try direct fetch (works if server sends CORS headers)
+async function fetchDirect(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Direct fetch failed');
+  const text = await res.text();
+  return parseRssXml(text, url);
+}
+
+// Parse RSS/Atom XML into the same format rss2json returns
+function parseRssXml(xmlText, feedUrl) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlText, 'text/xml');
+  const parseError = doc.querySelector('parsererror');
+  if (parseError) throw new Error('XML parse error');
+
+  // Detect Atom vs RSS
+  const isAtom = !!doc.querySelector('feed');
+  let feedTitle = '', items = [];
+
+  if (isAtom) {
+    feedTitle = doc.querySelector('feed > title')?.textContent || feedUrl;
+    doc.querySelectorAll('feed > entry').forEach(entry => {
+      items.push({
+        title: entry.querySelector('title')?.textContent || 'Untitled',
+        link: entry.querySelector('link[rel="alternate"]')?.getAttribute('href') || entry.querySelector('link')?.getAttribute('href') || '',
+        pubDate: entry.querySelector('updated')?.textContent || entry.querySelector('published')?.textContent || '',
+        author: entry.querySelector('author > name')?.textContent || '',
+        description: entry.querySelector('summary')?.textContent || '',
+        content: entry.querySelector('content')?.textContent || entry.querySelector('summary')?.textContent || '',
+      });
+    });
+  } else {
+    feedTitle = doc.querySelector('channel > title')?.textContent || feedUrl;
+    doc.querySelectorAll('item').forEach(item => {
+      items.push({
+        title: item.querySelector('title')?.textContent || 'Untitled',
+        link: item.querySelector('link')?.textContent || '',
+        pubDate: item.querySelector('pubDate')?.textContent || '',
+        author: item.querySelector('dc\\:creator')?.textContent || item.querySelector('creator')?.textContent || item.querySelector('author')?.textContent || '',
+        description: item.querySelector('description')?.textContent || '',
+        content: item.querySelector('content\\:encoded')?.textContent || item.querySelector('encoded')?.textContent || item.querySelector('description')?.textContent || '',
+      });
+    });
+  }
+
+  if (items.length === 0) throw new Error('No items found in feed');
+
+  return {
+    status: 'ok',
+    feed: { title: feedTitle, url: feedUrl },
+    items: items
+  };
+}
+
+// Main fetch: try strategies in order
+async function fetchFeed(url) {
+  const strategies = [
+    { name: 'rss2json', fn: () => fetchViaRss2Json(url) },
+    { name: 'CORS proxy', fn: () => fetchViaCorsProxy(url) },
+    { name: 'direct', fn: () => fetchDirect(url) },
+  ];
+
+  for (const strat of strategies) {
+    try {
+      const data = await strat.fn();
+      if (data && data.items && data.items.length > 0) return data;
+    } catch (e) {
+      // try next strategy
+    }
+  }
+  announce('Error: Could not load feed from any source. The feed may be temporarily unavailable.');
+  return null;
+}
+
+// ─── Feed Management ────────────────────────────────────────
+function saveFeedsToStorage() {
+  try { localStorage.setItem('a11y-rss-feeds', JSON.stringify(state.feeds)); } catch(e) {}
+}
+
+function loadFeedsFromStorage() {
+  try {
+    const d = localStorage.getItem('a11y-rss-feeds');
+    if (d) state.feeds = JSON.parse(d);
+  } catch(e) {}
+}
+
+function addFeed(title, url) {
+  if (state.feeds.some(f => f.url === url)) {
+    announce('Feed already subscribed: ' + title);
+    return;
+  }
+  state.feeds.push({ title, url, unread: 0 });
+  saveFeedsToStorage();
+  renderFeeds();
+  announce('Added feed: ' + title);
+}
+
+function removeFeed(url) {
+  const f = state.feeds.find(f => f.url === url);
+  state.feeds = state.feeds.filter(f => f.url !== url);
+  saveFeedsToStorage();
+  renderFeeds();
+  announce('Removed feed: ' + (f ? f.title : ''));
+}
+
+function renderFeeds() {
+  feedListEl.innerHTML = '';
+  $('feeds-empty').hidden = state.feeds.length > 0;
+
+  state.feeds.forEach((feed, i) => {
+    const li = document.createElement('li');
+    li.className = 'feed-item';
+    li.setAttribute('role', 'option');
+    li.setAttribute('tabindex', '0');
+    li.setAttribute('aria-label', `${feed.title}, ${feed.unread || 'no'} unread articles`);
+
+    // Read feed name aloud on focus
+    li.addEventListener('focus', () => {
+      if (state.speechEnabled) {
+        announce(`${feed.title}, ${feed.unread || 'no'} unread articles`);
+      }
+    });
+
+    li.innerHTML = `
+      <span class="feed-title">${esc(feed.title)}</span>
+      ${feed.unread ? `<span class="feed-count" aria-label="${feed.unread} unread">${feed.unread}</span>` : ''}
+      <button class="feed-remove" aria-label="Remove ${esc(feed.title)}" data-url="${esc(feed.url)}">&times;</button>
+    `;
+    li.addEventListener('click', e => {
+      if (e.target.classList.contains('feed-remove')) { removeFeed(e.target.dataset.url); return; }
+      openFeed(feed);
+    });
+    li.addEventListener('keydown', e => {
+      if (e.key === 'Enter') openFeed(feed);
+      if (e.key === 'Delete') removeFeed(feed.url);
+      if (e.key === 'ArrowDown') { e.preventDefault(); li.nextElementSibling?.focus(); }
+      if (e.key === 'ArrowUp') { e.preventDefault(); li.previousElementSibling?.focus(); }
+    });
+    li.querySelector('.feed-remove').addEventListener('click', e => { e.stopPropagation(); removeFeed(feed.url); });
+    feedListEl.appendChild(li);
+  });
+}
+
+// ─── Open Feed → Articles ───────────────────────────────────
+async function openFeed(feed) {
+  state.currentFeed = feed;
+  announce('Loading articles from ' + feed.title);
+  $('feeds-view').hidden = true;
+  $('articles-view').hidden = false;
+  $('reading-view').hidden = true;
+  $('articles-heading').textContent = feed.title;
+  articleListEl.innerHTML = '<li class="empty-state">Loading...</li>';
+
+  const data = await fetchFeed(feed.url);
+  if (!data) { articleListEl.innerHTML = '<li class="empty-state">Could not load this feed.</li>'; return; }
+
+  state.articles = data.items || [];
+  feed.unread = state.articles.length;
+  renderArticles();
+  announce(state.articles.length + ' articles loaded from ' + feed.title);
+  articleListEl.querySelector('[role="option"]')?.focus();
+}
+
+function renderArticles() {
+  articleListEl.innerHTML = '';
+  if (state.articles.length === 0) {
+    articleListEl.innerHTML = '<li class="empty-state">No articles found in this feed.</li>';
+    return;
+  }
+  state.articles.forEach((article, i) => {
+    const li = document.createElement('li');
+    li.className = 'article-item';
+    li.setAttribute('role', 'option');
+    li.setAttribute('tabindex', '0');
+    const date = article.pubDate ? new Date(article.pubDate).toLocaleDateString() : '';
+    const truncated = isLikelyTruncated(article);
+    li.innerHTML = `
+      <div class="article-title">${esc(article.title)}${truncated ? '<span class="truncated-badge" aria-label="possibly paywalled">Preview</span>' : ''}</div>
+      <div class="article-meta">${esc(date)} &middot; ${esc(article.author || '')}</div>
+    `;
+    li.setAttribute('aria-label', `${article.title}${truncated ? ', possibly paywalled' : ''}, ${date}`);
+
+    // Read title aloud on focus (keyboard navigation)
+    li.addEventListener('focus', () => {
+      if (state.speechEnabled) {
+        announce(`${article.title}${truncated ? '. Possibly paywalled.' : ''}`);
+      }
+    });
+
+    li.addEventListener('click', () => openArticle(i));
+    li.addEventListener('keydown', e => {
+      if (e.key === 'Enter') openArticle(i);
+      if (e.key === 'ArrowDown') { e.preventDefault(); li.nextElementSibling?.focus(); }
+      if (e.key === 'ArrowUp') { e.preventDefault(); li.previousElementSibling?.focus(); }
+      if (e.key === 'Escape') { $('back-to-feeds').click(); }
+    });
+    articleListEl.appendChild(li);
+  });
+}
+
+// ─── Open Article → Reading ─────────────────────────────────
+// Threshold for detecting truncated/paywalled content (characters of plain text)
+const TRUNCATED_THRESHOLD = 200;
+
+function isLikelyTruncated(article) {
+  const text = (article.content || article.description || '').replace(/<[^>]*>/g, '').trim();
+  return text.length < TRUNCATED_THRESHOLD && text.length > 0;
+}
+
+function getArticleLink(article) {
+  // Try multiple fields — Ghost and some feeds put it in different places
+  return article.link || article.guid || article.url || '';
+}
+
+function openArticle(index) {
+  state.currentArticleIndex = index;
+  const article = state.articles[index];
+  if (!article) return;
+
+  $('feeds-view').hidden = true;
+  $('articles-view').hidden = true;
+  $('reading-view').hidden = false;
+  $('reading-title').textContent = article.title;
+  $('reading-meta').textContent = [
+    article.feedTitle || '',
+    article.author,
+    article.pubDate ? new Date(article.pubDate).toLocaleDateString() : ''
+  ].filter(Boolean).join(' · ');
+
+  // Sanitise HTML content
+  const div = document.createElement('div');
+  const rawContent = article.content || article.description || '';
+  div.innerHTML = rawContent;
+  div.querySelectorAll('script,style,iframe,object,embed').forEach(el => el.remove());
+
+  // Fix images: ensure alt text, add aria roles for screen readers
+  div.querySelectorAll('img').forEach(img => {
+    if (!img.alt) img.alt = 'Article image';
+    img.setAttribute('loading', 'lazy');
+    // Remove width/height attributes so CSS takes over
+    img.removeAttribute('width');
+    img.removeAttribute('height');
+    // Remove inline styles that might override our CSS
+    img.style.cssText = '';
+  });
+
+  let contentHtml = div.innerHTML;
+
+  // Paywall / truncated detection
+  const plainText = div.textContent.trim();
+  const truncated = plainText.length < TRUNCATED_THRESHOLD && plainText.length > 0;
+
+  if (truncated) {
+    contentHtml = `<div class="paywall-warning" role="alert">
+      This article appears to be truncated or paywalled. Only a preview is shown. Visit the original site for the full article.
+    </div>` + contentHtml;
+  }
+
+  // Original article link
+  const link = getArticleLink(article);
+  if (link) {
+    contentHtml += `<a href="${esc(link)}" target="_blank" rel="noopener noreferrer" class="original-link" aria-label="Open original article on website">&#8599; Open original article</a>`;
+  }
+
+  $('reading-content').innerHTML = contentHtml;
+
+  // Auto-read: if speech is enabled, read the full article automatically
+  if (state.speechEnabled) {
+    const fullText = article.title + '. ' +
+      (truncated ? 'Warning: this article appears truncated or paywalled. ' : '') +
+      $('reading-content').textContent;
+    readAloud(fullText);
+    statusEl.textContent = 'Reading: ' + article.title;
+  } else {
+    statusEl.textContent = 'Opened: ' + article.title + (truncated ? ' (possibly paywalled)' : '');
+  }
+  $('read-aloud-btn').focus();
+}
+
+// Reading controls
+$('read-aloud-btn').addEventListener('click', () => {
+  const text = $('reading-title').textContent + '. ' + $('reading-content').textContent;
+  statusEl.textContent = 'Reading article aloud...';
+  readAloud(text);
+});
+$('stop-reading-btn').addEventListener('click', () => { stopReading(); statusEl.textContent = 'Stopped reading.'; });
+$('prev-article-btn').addEventListener('click', () => {
+  if (state.currentArticleIndex > 0) openArticle(state.currentArticleIndex - 1);
+});
+$('next-article-btn').addEventListener('click', () => {
+  if (state.currentArticleIndex < state.articles.length - 1) openArticle(state.currentArticleIndex + 1);
+});
+
+// Back buttons
+$('back-to-feeds').addEventListener('click', () => {
+  $('feeds-view').hidden = false;
+  $('articles-view').hidden = true;
+  $('reading-view').hidden = true;
+  stopReading();
+  announce('Back to feeds');
+  feedListEl.querySelector('[role="option"]')?.focus();
+});
+$('back-to-articles').addEventListener('click', () => {
+  $('feeds-view').hidden = true;
+  $('articles-view').hidden = false;
+  $('reading-view').hidden = true;
+  stopReading();
+  announce('Back to articles');
+  articleListEl.querySelector('[role="option"]')?.focus();
+});
+
+// ─── Search Feeds (live discovery) ──────────────────────────
+
+// Detect if input looks like a URL
+function looksLikeUrl(str) {
+  return /^(https?:\/\/)?[a-z0-9]+([\-\.][a-z0-9]+)*\.[a-z]{2,}(\/.*)?$/i.test(str.trim());
+}
+
+// Strategy A: Feedsearch API — discovers feeds on a given website
+async function discoverFeedsFromSite(siteUrl) {
+  let url = siteUrl.trim();
+  if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+  try {
+    const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent('https://feedsearch.dev/api/v1/search?url=' + encodeURIComponent(url))}`);
+    if (!res.ok) throw new Error('Feedsearch failed');
+    const data = await res.json();
+    if (!Array.isArray(data) || data.length === 0) return [];
+    return data.map(f => ({
+      title: f.title || f.site_name || url,
+      url: f.url,
+      description: f.description || '',
+      site: f.site_url || url,
+      isPodcast: f.is_podcast || false
+    }));
+  } catch(e) {
+    return [];
+  }
+}
+
+// Strategy B: Try common feed paths on the site directly
+async function tryCommonFeedPaths(siteUrl) {
+  let base = siteUrl.trim().replace(/\/+$/, '');
+  if (!/^https?:\/\//i.test(base)) base = 'https://' + base;
+  const paths = ['/feed/', '/rss/', '/feed', '/rss', '/feed.xml', '/rss.xml', '/atom.xml', '/index.xml', '/feeds/posts/default'];
+  const results = [];
+  for (const path of paths) {
+    try {
+      const testUrl = base + path;
+      const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(testUrl)}`;
+      const res = await fetch(proxy, { signal: AbortSignal.timeout(5000) });
+      if (!res.ok) continue;
+      const text = await res.text();
+      if (text.includes('<rss') || text.includes('<feed') || text.includes('<channel')) {
+        const parsed = parseRssXml(text, testUrl);
+        results.push({
+          title: parsed.feed?.title || base,
+          url: testUrl,
+          description: '',
+          site: base
+        });
+        break; // found one, that's enough
+      }
+    } catch(e) { /* try next */ }
+  }
+  return results;
+}
+
+// Strategy C: Google News RSS for keyword search
+async function searchGoogleNewsRss(query) {
+  const feedUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en&gl=IE&ceid=IE:en`;
+  try {
+    const data = await fetchFeed(feedUrl);
+    if (data && data.items && data.items.length > 0) {
+      return [{
+        title: `Google News: "${query}"`,
+        url: feedUrl,
+        description: `Live news results for "${query}" via Google News RSS`,
+        site: 'https://news.google.com',
+        isLiveTopic: true
+      }];
+    }
+  } catch(e) {}
+  return [];
+}
+
+// Curated directory (expanded) — searched locally as a supplement
+const FEED_DIRECTORY = [
+  { title: 'BBC News', url: 'http://feeds.bbci.co.uk/news/rss.xml', tags: 'news bbc uk world' },
+  { title: 'BBC Technology', url: 'http://feeds.bbci.co.uk/news/technology/rss.xml', tags: 'technology bbc' },
+  { title: 'NPR News', url: 'https://feeds.npr.org/1001/rss.xml', tags: 'news npr us' },
+  { title: 'The Guardian', url: 'https://www.theguardian.com/world/rss', tags: 'news guardian world uk' },
+  { title: 'RTÉ News', url: 'https://www.rte.ie/news/rss/news-headlines.xml', tags: 'news ireland rte' },
+  { title: 'The Irish Times', url: 'https://www.irishtimes.com/cmlink/news-1.1319192', tags: 'news ireland irish' },
+  { title: 'Ars Technica', url: 'https://feeds.arstechnica.com/arstechnica/index', tags: 'technology science' },
+  { title: 'Hacker News', url: 'https://hnrss.org/frontpage', tags: 'technology programming hacker' },
+  { title: 'TechCrunch', url: 'https://techcrunch.com/feed/', tags: 'technology startup' },
+  { title: 'The Verge', url: 'https://www.theverge.com/rss/index.xml', tags: 'technology culture' },
+  { title: 'Wired', url: 'https://www.wired.com/feed/rss', tags: 'technology science culture' },
+  { title: 'NASA', url: 'https://www.nasa.gov/rss/dyn/breaking_news.rss', tags: 'science space nasa' },
+  { title: 'Nature', url: 'http://feeds.nature.com/nature/rss/current', tags: 'science research nature' },
+  { title: 'ESPN', url: 'https://www.espn.com/espn/rss/news', tags: 'sports espn' },
+  { title: 'WebAIM Blog', url: 'https://webaim.org/blog/feed', tags: 'accessibility web a11y' },
+  { title: 'A11y Weekly', url: 'https://a11yweekly.com/feed/feed.xml', tags: 'accessibility a11y web' },
+  { title: 'AppleVis', url: 'https://www.applevis.com/rss.xml', tags: 'accessibility apple ios blind' },
+  { title: 'Smashing Magazine', url: 'https://www.smashingmagazine.com/feed', tags: 'web design development' },
+  { title: 'Serious Eats', url: 'https://www.seriouseats.com/feed', tags: 'cooking food recipes' },
+  { title: 'NYT Dining', url: 'https://rss.nytimes.com/services/xml/rss/nyt/DiningandWine.xml', tags: 'cooking food nyt' },
+  { title: 'Christianity Today', url: 'https://www.christianitytoday.com/feed/', tags: 'christian theology religion faith' },
+  { title: 'Desiring God', url: 'https://www.desiringgod.org/feeds/all', tags: 'christian theology reformed faith' },
+  { title: 'The Gospel Coalition', url: 'https://www.thegospelcoalition.org/feed/', tags: 'christian theology evangelical gospel' },
+  { title: 'Evangelical Times', url: 'https://www.evangelical-times.org/rss/', tags: 'christian evangelical theology reformed' },
+  { title: 'Reformation21', url: 'https://www.reformation21.org/rss.xml', tags: 'christian reformed theology' },
+  { title: 'Tim Challies', url: 'https://www.challies.com/feed/', tags: 'christian blog reformed books' },
+  { title: 'Planet Money', url: 'https://feeds.npr.org/510289/podcast.xml', tags: 'economics podcast finance money npr' },
+  { title: 'FiveThirtyEight', url: 'https://fivethirtyeight.com/feed/', tags: 'data politics science statistics' },
+  { title: 'Krebs on Security', url: 'https://krebsonsecurity.com/feed/', tags: 'security cyber hacking' },
+  { title: 'xkcd', url: 'https://xkcd.com/rss.xml', tags: 'comics xkcd science humour' },
+  { title: 'Lifehacker', url: 'https://lifehacker.com/feed/rss', tags: 'productivity tips life' },
+  { title: 'The Atlantic', url: 'https://www.theatlantic.com/feed/all/', tags: 'news culture politics longform' },
+  { title: 'Brain Pickings', url: 'https://feeds.feedburner.com/brainpickings/rss', tags: 'culture philosophy books literature' },
+  { title: 'Daring Fireball', url: 'https://daringfireball.net/feeds/main', tags: 'apple technology mac' },
+  { title: 'Accessibility in the News', url: 'https://www.lflegal.com/feed/', tags: 'accessibility disability law' },
+];
+
+function searchDirectory(query) {
+  const q = query.toLowerCase().trim();
+  const words = q.split(/\s+/);
+  return FEED_DIRECTORY.filter(f =>
+    words.some(w => f.title.toLowerCase().includes(w) || f.tags.includes(w))
+  ).map(f => ({ title: f.title, url: f.url, description: '', site: '' }));
+}
+
+// Main search orchestrator
+$('search-btn').addEventListener('click', doSearch);
+searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+async function doSearch() {
+  const q = searchInput.value.trim();
+  if (!q) { announce('Please enter search keywords or a website URL'); return; }
+
+  searchResults.innerHTML = '';
+  $('search-empty').hidden = true;
+  $('search-status').textContent = 'Searching...';
+  announce('Searching for ' + q);
+
+  let allResults = [];
+
+  if (looksLikeUrl(q)) {
+    // URL mode: discover feeds on that site
+    $('search-status').textContent = 'Discovering feeds on ' + q + '...';
+    announce('Discovering feeds on ' + q);
+
+    const feedsearchResults = await discoverFeedsFromSite(q);
+    allResults.push(...feedsearchResults);
+
+    if (allResults.length === 0) {
+      $('search-status').textContent = 'Trying common feed paths...';
+      const probeResults = await tryCommonFeedPaths(q);
+      allResults.push(...probeResults);
+    }
+  } else {
+    // Keyword mode: search directory + Google News RSS
+    $('search-status').textContent = 'Searching feeds for "' + q + '"...';
+
+    // Local directory matches
+    const dirResults = searchDirectory(q);
+    allResults.push(...dirResults);
+
+    // Google News RSS topic feed
+    const googleResults = await searchGoogleNewsRss(q);
+    allResults.push(...googleResults);
+  }
+
+  // Deduplicate by URL
+  const seen = new Set();
+  allResults = allResults.filter(r => {
+    if (seen.has(r.url)) return false;
+    seen.add(r.url);
+    return true;
+  });
+
+  $('search-status').textContent = allResults.length > 0
+    ? `Found ${allResults.length} feed${allResults.length === 1 ? '' : 's'}.`
+    : '';
+
+  if (allResults.length === 0) {
+    $('search-empty').hidden = false;
+    $('search-empty').textContent = looksLikeUrl(q)
+      ? `No RSS feeds found on "${q}". The site may not offer RSS, or try the full URL (e.g. https://${q}).`
+      : `No feeds found for "${q}". Try different keywords, or paste a website URL to discover its feeds.`;
+    announce('No feeds found');
+    return;
+  }
+
+  renderSearchResults(allResults);
+  announce(allResults.length + ' feeds found');
+  searchResults.querySelector('.search-result')?.focus();
+}
+
+function renderSearchResults(results) {
+  searchResults.innerHTML = '';
+  $('search-empty').hidden = true;
+
+  results.forEach(r => {
+    const li = document.createElement('li');
+    li.className = 'search-result';
+    li.setAttribute('tabindex', '0');
+    const alreadyAdded = state.feeds.some(f => f.url === r.url);
+    li.innerHTML = `
+      <div class="sr-info">
+        <div class="sr-title">${esc(r.title)}${r.isPodcast ? ' (Podcast)' : ''}${r.isLiveTopic ? ' (Live topic feed)' : ''}</div>
+        <div class="sr-url">${esc(r.url)}</div>
+        ${r.description ? `<div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;">${esc(r.description)}</div>` : ''}
+      </div>
+      <button class="primary" ${alreadyAdded ? 'disabled' : ''} aria-label="Subscribe to ${esc(r.title)}">${alreadyAdded ? 'Added' : 'Subscribe'}</button>
+    `;
+    li.querySelector('button').addEventListener('click', () => {
+      addFeed(r.title, r.url);
+      li.querySelector('button').textContent = 'Added';
+      li.querySelector('button').disabled = true;
+    });
+    li.addEventListener('keydown', e => {
+      if (e.key === 'Enter') li.querySelector('button').click();
+      if (e.key === 'ArrowDown') { e.preventDefault(); li.nextElementSibling?.focus(); }
+      if (e.key === 'ArrowUp') { e.preventDefault(); li.previousElementSibling?.focus(); }
+    });
+    searchResults.appendChild(li);
+  });
+}
+
+// ─── Add by URL ─────────────────────────────────────────────
+$('add-url-btn').addEventListener('click', addByUrl);
+urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') addByUrl(); });
+
+async function addByUrl() {
+  const url = urlInput.value.trim();
+  if (!url) { announce('Please enter a feed URL'); return; }
+  announce('Checking feed URL...');
+  const data = await fetchFeed(url);
+  if (data) {
+    addFeed(data.feed?.title || url, url);
+    urlInput.value = '';
+    activateTab($('tab-feeds'));
+  } else {
+    announce('Could not load feed from that URL. Please check it is a valid RSS or Atom feed.');
+  }
+}
+
+// ─── Global keyboard shortcuts ──────────────────────────────
+document.addEventListener('keydown', e => {
+  // Don't trigger when typing in inputs
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) {
+    if (e.key === 'Escape') e.target.blur();
+    return;
+  }
+  if (helpDialog.open) return;
+
+  switch(e.key) {
+    case '?': helpDialog.showModal(); break;
+    case 's': case 'S': speechToggle.click(); break;
+    case 'r': case 'R':
+      if (!$('reading-view').hidden) $('read-aloud-btn').click();
+      break;
+    case 'x': case 'X': stopReading(); announce('Stopped reading'); break;
+    case 'n': case 'N':
+      if (!$('reading-view').hidden) $('next-article-btn').click();
+      break;
+    case 'p': case 'P':
+      if (!$('reading-view').hidden) $('prev-article-btn').click();
+      break;
+    case '/': e.preventDefault(); searchInput.focus(); activateTab($('tab-search')); break;
+    case 'd': case 'D': activateTab($('tab-digest')); break;
+    case 'Escape':
+      if (!$('reading-view').hidden) $('back-to-articles').click();
+      else if (!$('articles-view').hidden) $('back-to-feeds').click();
+      break;
+  }
+});
+
+// ─── Utility ────────────────────────────────────────────────
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+// ─── Digest ─────────────────────────────────────────────────
+const digestListEl = $('digest-list');
+let digestArticles = [];
+
+async function loadDigest() {
+  if (state.feeds.length === 0) {
+    $('digest-empty').hidden = false;
+    digestListEl.innerHTML = '';
+    $('digest-status').textContent = '';
+    announce('No feeds subscribed yet. Add some feeds to see your digest.');
+    return;
+  }
+
+  $('digest-empty').hidden = true;
+  digestListEl.innerHTML = '';
+  $('digest-status').textContent = `Loading latest from ${state.feeds.length} feed${state.feeds.length === 1 ? '' : 's'}...`;
+  announce(`Loading digest from ${state.feeds.length} feeds`);
+
+  digestArticles = [];
+  let loaded = 0;
+  let failed = 0;
+
+  // Fetch all feeds in parallel
+  const promises = state.feeds.map(async (feed) => {
+    try {
+      const data = await fetchFeed(feed.url);
+      if (data && data.items && data.items.length > 0) {
+        // Take up to 3 latest items per feed
+        const items = data.items.slice(0, 3).map(item => ({
+          ...item,
+          feedTitle: data.feed?.title || feed.title,
+          feedUrl: feed.url
+        }));
+        digestArticles.push(...items);
+        loaded++;
+      } else {
+        failed++;
+      }
+    } catch(e) {
+      failed++;
+    }
+    $('digest-status').textContent = `Loaded ${loaded} of ${state.feeds.length} feeds...`;
+  });
+
+  await Promise.all(promises);
+
+  // Sort by date, newest first
+  digestArticles.sort((a, b) => {
+    const da = a.pubDate ? new Date(a.pubDate).getTime() : 0;
+    const db = b.pubDate ? new Date(b.pubDate).getTime() : 0;
+    return db - da;
+  });
+
+  const statusMsg = `${digestArticles.length} articles from ${loaded} feed${loaded === 1 ? '' : 's'}` +
+    (failed > 0 ? ` (${failed} feed${failed === 1 ? '' : 's'} could not be loaded)` : '');
+  $('digest-status').textContent = statusMsg;
+  announce(statusMsg);
+
+  if (digestArticles.length === 0) {
+    $('digest-empty').hidden = false;
+    $('digest-empty').textContent = 'Could not load articles from your feeds. Try refreshing.';
+    return;
+  }
+
+  renderDigest();
+}
+
+function renderDigest() {
+  digestListEl.innerHTML = '';
+
+  digestArticles.forEach((article, i) => {
+    const li = document.createElement('li');
+    li.className = 'article-item';
+    li.setAttribute('role', 'option');
+    li.setAttribute('tabindex', '0');
+    const date = article.pubDate ? new Date(article.pubDate).toLocaleDateString() : '';
+    const truncated = isLikelyTruncated(article);
+    li.innerHTML = `
+      <div class="article-title">${esc(article.title)}${truncated ? '<span class="truncated-badge" aria-label="possibly paywalled">Preview</span>' : ''}</div>
+      <div class="article-meta">
+        <strong style="color:var(--accent);">${esc(article.feedTitle)}</strong>
+        &middot; ${esc(date)}
+        ${article.author ? '&middot; ' + esc(article.author) : ''}
+      </div>
+    `;
+    li.setAttribute('aria-label', `${article.title}${truncated ? ', possibly paywalled' : ''}, from ${article.feedTitle}, ${date}`);
+
+    // Read title aloud on focus (keyboard navigation)
+    li.addEventListener('focus', () => {
+      if (state.speechEnabled) {
+        const spokenText = `${article.title}. From ${article.feedTitle}.${truncated ? ' Possibly paywalled.' : ''}`;
+        announce(spokenText);
+      }
+    });
+
+    li.addEventListener('click', () => openDigestArticle(i));
+    li.addEventListener('keydown', e => {
+      if (e.key === 'Enter') openDigestArticle(i);
+      if (e.key === 'ArrowDown') { e.preventDefault(); li.nextElementSibling?.focus(); }
+      if (e.key === 'ArrowUp') { e.preventDefault(); li.previousElementSibling?.focus(); }
+    });
+    digestListEl.appendChild(li);
+  });
+}
+
+function openDigestArticle(index) {
+  // Reuse the feeds panel reading view with the improved openArticle
+  state.articles = digestArticles;
+  activateTab($('tab-feeds'));
+  openArticle(index);
+}
+
+$('digest-refresh').addEventListener('click', loadDigest);
+
+$('digest-read-all').addEventListener('click', () => {
+  if (digestArticles.length === 0) { announce('No articles to read'); return; }
+  const headlines = digestArticles.map((a, i) =>
+    `${i + 1}. From ${a.feedTitle}: ${a.title}.`
+  ).join(' ');
+  readAloud(`Here are your latest headlines. ${headlines}`);
+  announce('Reading all headlines aloud');
+});
+
+// ─── Init ───────────────────────────────────────────────────
+loadFeedsFromStorage();
+renderFeeds();
+announce('Accessible RSS Reader loaded. ' + state.feeds.length + ' feeds subscribed. Use Tab to navigate.');
+// Auto-load digest on startup
+loadDigest();
+</script>
+</body>
+</html>
